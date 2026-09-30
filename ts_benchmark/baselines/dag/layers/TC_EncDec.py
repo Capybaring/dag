@@ -44,6 +44,7 @@ class TemporalCausalityEncoder(nn.Module):
         self.x_patch_embedding = PatchEmbedding(
             d_model, patch_len, stride, padding, dropout
         )
+        # 初始化两个patch embedding器，一个用于外生变量，一个用于时间序列变量
 
         self.encoder_exg = self._build_encoder(
             d_model=d_model, d_ff=d_ff, n_heads=n_heads, dropout=dropout, activation=activation, output_attention=True,
@@ -53,6 +54,7 @@ class TemporalCausalityEncoder(nn.Module):
             d_model=d_model, d_ff=d_ff, n_heads=n_heads, dropout=dropout, activation=activation, output_attention=False,
             factor=factor, e_layers=e_layers
         )
+        # 初始化两个transformer embedding器，一个用于外生变量，一个用于时间序列变量
 
         self.x_projector = CompressAndProject(self.series_dim, self.seq_len, d_model)
         self.exog_projector = CompressAndProject(enc_in - series_dim, self.seq_len, d_model)
@@ -88,27 +90,33 @@ class TemporalCausalityEncoder(nn.Module):
 
         exog_history_means = exog_history.mean(1, keepdim=True).detach()
         x_history_means = x_history.mean(1, keepdim=True).detach()
+        # 计算均值
 
         exog_history_stdev = torch.sqrt(torch.var(exog_history, dim=1, keepdim=True, unbiased=False) + 1e-5).detach()
         x_history_stdev = torch.sqrt(torch.var(x_history, dim=1, keepdim=True, unbiased=False) + 1e-5).detach()
-
+        # 计算标准差
+        
         exog_history = self.sample_norm(exog_history, exog_history_means, exog_history_stdev)
         x_history = self.sample_norm(x_history, x_history_means, x_history_stdev)
+        # 归一化
 
         exog_history = exog_history.permute(0, 2, 1)
         x_history = x_history.permute(0, 2, 1)
+        # 转置维度，后续在最后一维切分patch
 
         # patch_exog, exog_vars = self.patch_embedding(exog_history)
         # patch_x, x_vars = self.patch_embedding(x_history)
 
         patch_exog, exog_vars = self.exog_patch_embedding(exog_history)
         patch_x, x_vars = self.x_patch_embedding(x_history)
+        # 将时间序列切分为patch，得到patch_exog和patch_x
 
-        enc_exog_out, _ = self.encoder_exg(patch_exog)
+        enc_exog_out, _ = self.encoder_exg(patch_exog) # 只取历史外生变量的编码输出
         if use_exog:
-            _, causality_attns = self.encoder_exg(patch_x)
+            _, causality_attns = self.encoder_exg(patch_x) # 共享注意力权重参数
         else:
             causality_attns = None
+        
 
         exog_history = exog_history.permute(0, 2, 1)
         x_history = x_history.permute(0, 2, 1)
@@ -119,6 +127,7 @@ class TemporalCausalityEncoder(nn.Module):
         attn_alpha = F.sigmoid(torch.einsum('bd,bd->b', x_history_projection, exog_history_projection)).view(-1, 1, 1,
                                                                                                              1)
         # print("tc attn_alpha mean:", torch.mean(attn_alpha))
+        # 融合注意力分数的权重
         enc_x_out, _ = self.encoder_x(patch_x, exog_attns=causality_attns,
                                       attn_alpha=attn_alpha.repeat(self.series_dim, 1, 1, 1))
 
