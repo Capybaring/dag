@@ -128,8 +128,12 @@ class TemporalCausalityEncoder(nn.Module):
                                                                                                              1)
         # print("tc attn_alpha mean:", torch.mean(attn_alpha))
         # 融合注意力分数的权重
-        enc_x_out, _ = self.encoder_x(patch_x, exog_attns=causality_attns,
-                                      attn_alpha=attn_alpha.repeat(self.series_dim, 1, 1, 1))
+        # PatchEmbedding flattens samples before channels; keep each sample's
+        # attention gate with all of its target channels.
+        enc_x_out, _ = self.encoder_x(
+            patch_x, exog_attns=causality_attns,
+            attn_alpha=attn_alpha.repeat_interleave(self.series_dim, dim=0),
+        )
 
         enc_exog_out = torch.reshape(
             enc_exog_out, (-1, exog_vars, enc_exog_out.shape[-2], enc_exog_out.shape[-1])
