@@ -48,6 +48,19 @@ sh ./scripts/w_future/DAG.sh
 
 
 
+## DIST: nine targets and nine OP covariates
+
+For the DIST industrial dataset, see [the 9+9 preparation and training guide](docs/DIST_9x9.md).
+It preserves nine controller PV channels as forecasting targets and nine matching
+OP channels as auxiliary inputs, with unknown future covariates at inference.
+
+```shell
+python scripts/prepare_dist_9x9.py --input /path/to/DIST_DataSet.npz
+python scripts/run_dist_9x9.py
+```
+
+Private datasets remain in the ignored `dataset/` directory.
+
 ## Results
 We utilize the Time Series Forecasting Benchmark (TFB) code repository as a unified evaluation framework, providing access to **all baseline codes, scripts, and results**. Following the settings in TFB, we do not apply the **"Drop Last"** trick to ensure a fair comparison.
 
