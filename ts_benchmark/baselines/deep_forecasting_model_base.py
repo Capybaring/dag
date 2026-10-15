@@ -541,6 +541,11 @@ class DeepForecastingModelBase(ModelBase):
         print(f"Total trainable parameters: {total_params}")
 
         for epoch in range(config.num_epochs):
+            print(
+                f"Epoch {epoch + 1}/{config.num_epochs}, "
+                f"训练 iters: {len(self.train_data_loader)}",
+                flush=True,
+            )
             self.model.train()
             if self.CovariateFusion is not None:
                 self.CovariateFusion.train()
@@ -577,7 +582,13 @@ class DeepForecastingModelBase(ModelBase):
 
                 loss = criterion(output, target)
                 # print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
-
+                if i == 0 or (i + 1) % 200 == 0:
+                    print(
+                        f"Epoch {epoch + 1}/{config.num_epochs}, "
+                        f"iter {i + 1}/{len(self.train_data_loader)}, "
+                        f"loss={loss.item():.6f}",
+                        flush=True,
+                    )
                 total_loss = loss + additional_loss
 
                 if config.use_amp == 1:
