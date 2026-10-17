@@ -23,6 +23,19 @@ Additionally, a Channel Correlation Module is introduced. It features a channel 
 
 ## Quickstart
 
+### Irregular DIST with known future exogenous variables
+
+For true irregular 9-OP/9-PV DIST, use the new
+[t-PatchGNN-compatible data and evaluation entry point](docs/irregular_DIST.md):
+
+```bash
+bash scripts/w_future/PatchDelay_DIST_irregular_9x9.sh
+```
+
+This preserves the existing DAG/PatchDelay exogenous fusion and regular-data
+entry point. It uses elapsed-time patches, observation masks, seen-set min-max
+normalization and per-variable masked MSE/MAE evaluation.
+
 > [!IMPORTANT]
 > this project is fully tested under python 3.8, it is recommended that you set the Python version to 3.8.
 1. Requirements

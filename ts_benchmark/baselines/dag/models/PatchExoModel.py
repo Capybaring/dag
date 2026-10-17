@@ -100,14 +100,25 @@ class PatchExoModel(nn.Module):
         indices = torch.arange(future_len, device=device) // self.stride
         return indices.clamp_max(num_patches - 1)
 
-    def _build_exogenous_key_value(self, H_x, M_x, H_future, M_future, future_len):
+    @staticmethod
+    def _select_query_patches(tokens, indices):
+        if indices.ndim == 1:
+            return tokens.index_select(2, indices)
+        shape = [tokens.shape[0], tokens.shape[1], indices.shape[1]]
+        index = indices[:, None, :].expand(*shape)
+        if tokens.ndim == 4:
+            index = index.unsqueeze(-1).expand(*shape, tokens.shape[-1])
+        return tokens.gather(2, index)
+
+    def _build_exogenous_key_value(self, H_x, M_x, H_future, M_future, future_len,
+                                   query_indices=None):
         """Baseline fusion; subclasses can add a delay representation here."""
         x_state = self._masked_patch_mean(H_x, M_x)
-        patch_index = self._future_patch_indices(
+        patch_index = query_indices if query_indices is not None else self._future_patch_indices(
             future_len, H_future.shape[2], H_future.device
         )
-        x_at_query = H_future.index_select(2, patch_index)
-        x_available = M_future.index_select(2, patch_index)
+        x_at_query = self._select_query_patches(H_future, patch_index)
+        x_available = self._select_query_patches(M_future, patch_index)
         x_at_query = (
             x_at_query
             + self.x_history_projection(x_state).unsqueeze(2)
@@ -178,10 +189,16 @@ class PatchExoModel(nn.Module):
             exog_future, t_future, future_mask
         )
 
+        return self._predict_from_tokens(H_y, M_y, H_x, M_x, H_future, M_future, t_future)
+
+    def _predict_from_tokens(self, H_y, M_y, H_x, M_x, H_future, M_future,
+                             t_future, query_indices=None):
+        """Shared DAG exogenous fusion/head for regular and packed IMTS input."""
+        future_len = t_future.shape[1]
         y_state = self._encode_y_history(H_y, M_y)
         y_state = y_state + self.target_embedding.weight.unsqueeze(0)
         key, value, x_available = self._build_exogenous_key_value(
-            H_x, M_x, H_future, M_future, future_len
+            H_x, M_x, H_future, M_future, future_len, query_indices=query_indices
         )
 
         time_features = self.time_projection(

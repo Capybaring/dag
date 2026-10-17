@@ -116,3 +116,27 @@ class IrregularPatchEncoder(nn.Module):
         tokens = tokens.reshape(batch, channels, patches, self.d_model)
         patch_mask = patch_valid.reshape(batch, channels, patches)
         return tokens, patch_mask
+
+    def forward_patches(self, values, times, mask):
+        """Encode t-PatchGNN-packed [B,K,L,C] variable observation lists.
+
+        Patching is done using actual time intervals by the collator; the
+        regular-slot forward path and all learnable parameters are unchanged.
+        """
+        if values.ndim != 4 or times.shape != values.shape or mask.shape != values.shape:
+            raise ValueError('Packed values, times and mask must share [B,K,L,C]')
+        if min(values.shape) < 1 or not values.is_floating_point():
+            raise ValueError('Packed dimensions must be positive floating point values')
+        mask = mask.to(device=values.device, dtype=torch.bool)
+        times = times.to(values)
+        values = torch.where(mask, values, torch.zeros_like(values))
+        times = torch.where(mask, times, torch.zeros_like(times))
+        if not torch.isfinite(values).all() or not torch.isfinite(times).all():
+            raise ValueError('Observed values and times must be finite')
+        b, k, length, c = values.shape
+        x = values.permute(0, 3, 1, 2).reshape(-1, length, 1)
+        t = times.permute(0, 3, 1, 2).reshape(-1, length, 1)
+        m = mask.permute(0, 3, 1, 2).reshape(-1, length, 1)
+        encoded, valid = self.TTCN(torch.cat([x, self.LearnableTE(t)], dim=-1), m)
+        tokens = torch.cat([encoded, valid.to(encoded.dtype)], dim=-1)
+        return tokens.reshape(b, c, k, self.d_model), valid.reshape(b, c, k)
