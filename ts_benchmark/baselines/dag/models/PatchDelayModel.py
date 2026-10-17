@@ -38,9 +38,10 @@ class PatchDelayModel(PatchExoModel):
             self.d_model, self.d_model, bias=False
         )
 
-    def _build_exogenous_key_value(self, H_x, M_x, H_future, M_future, future_len):
+    def _build_exogenous_key_value(self, H_x, M_x, H_future, M_future, future_len,
+                                   query_indices=None):
         key, value, available = super()._build_exogenous_key_value(
-            H_x, M_x, H_future, M_future, future_len
+            H_x, M_x, H_future, M_future, future_len, query_indices=query_indices
         )
         if not self.use_delay:
             return key, value, available
@@ -52,11 +53,11 @@ class PatchDelayModel(PatchExoModel):
         history_patches = H_x.shape[2]
         future_delay = delay[:, :, history_patches:]
         future_valid = delay_valid[:, :, history_patches:]
-        patch_index = self._future_patch_indices(
+        patch_index = query_indices if query_indices is not None else self._future_patch_indices(
             future_len, H_future.shape[2], H_future.device
         )
-        at_query = future_delay.index_select(2, patch_index)
-        valid_at_query = future_valid.index_select(2, patch_index)
+        at_query = self._select_query_patches(future_delay, patch_index)
+        valid_at_query = self._select_query_patches(future_valid, patch_index)
 
         key = key + self.delay_key_projection(at_query)
         value = value + self.delay_value_projection(at_query)
